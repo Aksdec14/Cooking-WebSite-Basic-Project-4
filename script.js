@@ -1,74 +1,109 @@
-const searchBtn = document.getElementById('search-btn');
-const mealList = document.getElementById('meal');
-const mealDetailsContent = document.querySelector('.meal-details-content');
-const recipeCloseBtn = document.getElementById('recipe-close-btn');
+// Select the necessary DOM elements
+const searchControl = document.querySelector('.search-control');
+const searchButton = document.querySelector('.search-btn');
+const mealContainer = document.getElementById('meal');
+const mealDetails = document.querySelector('.meal-details');
 
-// event listeners
-searchBtn.addEventListener('click', getMealList);
-mealList.addEventListener('click', getMealRecipe);
-recipeCloseBtn.addEventListener('click', () => {
-    mealDetailsContent.parentElement.classList.remove('showRecipe');
-});
-
-function getMealList(){
-    let searchInputTxt = document.getElementById('search-input').value.trim();
-    fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?i=${searchInputTxt}`)
-    .then(response => response.json())
-    .then(data => {
-        let html = "";
-        if(data.meals){
-            data.meals.forEach(meal => {
-                html += `
-                    <div class = "meal-item" data-id = "${meal.idMeal}">
-                        <div class = "meal-img">
-                            <img src = "${meal.strMealThumb}" alt = "food">
-                        </div>
-                        <div class = "meal-name">
-                            <h3>${meal.strMeal}</h3>
-                            <a href = "#" class = "recipe-btn">Get Recipe</a>
-                        </div>
-                    </div>
-                `;
-            });
-            mealList.classList.remove('notFound');
-        } else{
-            html = "Sorry, we didn't find any meal!";
-            mealList.classList.add('notFound');
-        }
-
-        mealList.innerHTML = html;
-    });
-}
-
-
-function getMealRecipe(e){
-    e.preventDefault();
-    if(e.target.classList.contains('recipe-btn')){
-        let mealItem = e.target.parentElement.parentElement;
-        fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealItem.dataset.id}`)
-        .then(response => response.json())
-        .then(data => mealRecipeModal(data.meals));
+// Function to fetch meals based on the search query
+async function fetchMeals(query) {
+    try {
+        const res = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${query}`);
+        const data = await res.json();
+        return data.meals || [];
+    } catch (error) {
+        console.error("Error fetching meals:", error);
+        return [];
     }
 }
 
-// create a modal
-function mealRecipeModal(meal){
-    console.log(meal);
-    meal = meal[0];
-    let html = `
-        <h2 class = "recipe-title">${meal.strMeal}</h2>
-        <p class = "recipe-category">${meal.strCategory}</p>
-        <div class = "recipe-instruct">
-            <h3>Instructions:</h3>
-            <p>${meal.strInstructions}</p>
-        </div>
-        <div class = "recipe-meal-img">
-            <img src = "${meal.strMealThumb}" alt = "">
-        </div>
-        <div class = "recipe-link">
-            <a href = "${meal.strYoutube}" target = "_blank">Watch Video</a>
-        </div>
-    `;
-    mealDetailsContent.innerHTML = html;
-    mealDetailsContent.parentElement.classList.add('showRecipe');
+// Function to display meal results
+function displayMeals(meals) {
+    mealContainer.innerHTML = '';
+    if (meals.length === 0) {
+        mealContainer.innerHTML = `<div class="notFound">No meals found</div>`;
+        return;
+    }
+
+    meals.forEach(meal => {
+        const mealItem = document.createElement('div');
+        mealItem.classList.add('meal-item');
+        mealItem.innerHTML = `
+            <div class="meal-img">
+                <img src="${meal.strMealThumb}" alt="${meal.strMeal}">
+            </div>
+            <div class="meal-name">
+                <h3>${meal.strMeal}</h3>
+                <a href="#" class="recipe-btn" data-id="${meal.idMeal}">View Recipe</a>
+            </div>
+        `;
+        mealContainer.appendChild(mealItem);
+    });
+
+    // Add event listeners for recipe buttons
+    addRecipeEventListeners();
 }
+
+// Function to display meal details
+async function displayMealDetails(mealId) {
+    try {
+        const res = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`);
+        const data = await res.json();
+        const meal = data.meals[0];
+
+        mealDetails.innerHTML = `
+            <button class="recipe-close-btn">X</button>
+            <div class="meal-details-content">
+                <h2 class="recipe-title">${meal.strMeal}</h2>
+                <p class="recipe-category">${meal.strCategory}</p>
+                <div class="recipe-meal-img">
+                    <img src="${meal.strMealThumb}" alt="${meal.strMeal}">
+                </div>
+                <p class="recipe-instruct">${meal.strInstructions}</p>
+                <div class="recipe-link">
+                    <a href="${meal.strSource}" target="_blank">View Full Recipe</a>
+                </div>
+            </div>
+        `;
+        mealDetails.classList.add('showRecipe');
+
+        // Close the recipe details when the close button is clicked
+        const recipeCloseBtn = document.querySelector('.recipe-close-btn'); // Re-select button inside dynamically added content
+        recipeCloseBtn.addEventListener('click', () => {
+            mealDetails.classList.remove('showRecipe');
+        });
+    } catch (error) {
+        console.error("Error fetching meal details:", error);
+    }
+}
+
+// Function to add event listeners to "View Recipe" buttons
+function addRecipeEventListeners() {
+    const recipeBtns = document.querySelectorAll('.recipe-btn');
+    recipeBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const mealId = btn.getAttribute('data-id');
+            displayMealDetails(mealId);
+        });
+    });
+}
+
+// Event listener for the search button
+searchButton.addEventListener('click', async () => {
+    const query = searchControl.value.trim();
+    if (query) {
+        const meals = await fetchMeals(query);
+        displayMeals(meals);
+    }
+});
+
+// Event listener for Enter key on search input
+searchControl.addEventListener('keypress', async (e) => {
+    if (e.key === 'Enter') {
+        const query = searchControl.value.trim();
+        if (query) {
+            const meals = await fetchMeals(query);
+            displayMeals(meals);
+        }
+    }
+});
